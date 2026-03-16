@@ -46,7 +46,7 @@ Navigate to `http://localhost:5173` to test the UI!
 *(Upload a screenshot of the FireReach UI here showcasing the "Campaign Target" input form and the generated LangGraph trace output panels).*
 
 ## 🌍 Free Deployment Links
-* **Frontend (Vercel)**: `https://firereach-ui.vercel.app` *(Replace with your URL after following DEPLOYMENT instructions in DOCS.md)*
-* **Backend API (Render)**: `https://firereach-api.onrender.com/docs` *(Replace with your URL)*
+* **Frontend (Vercel)**: `https://fire-reach-iota.vercel.app/`
+* **Backend API (Render)**: `https://firereach-api-flbo.onrender.com/docs`
 
 *For detailed system architecture, tool schemas, and free deployment guides, please see [DOCS.md](DOCS.md).*
