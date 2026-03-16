@@ -112,7 +112,7 @@ def tool_research_analyst(icp: str, signals: str) -> str:
             
         llm = ChatGroq(
             temperature=0.2,
-            model_name="llama3-70b-8192", 
+            model_name="llama-3.3-70b-versatile", 
             api_key=settings.GROQ_API_KEY
         )
         
@@ -191,7 +191,7 @@ def tool_outreach_automated_sender(email: str, account_brief: str, signals: str)
         else:
             llm = ChatGroq(
                 temperature=0.7,
-                model_name="llama3-70b-8192", 
+                model_name="llama-3.3-70b-versatile", 
                 api_key=settings.GROQ_API_KEY
             )
             chain = prompt | llm
