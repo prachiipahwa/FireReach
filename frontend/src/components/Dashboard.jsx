@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { runFireReachAgent } from '../api';
 import { Play, CheckCircle2, AlertCircle, Activity, FileText, Send } from 'lucide-react';
 
@@ -12,6 +12,28 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
+  const [displayedTrace, setDisplayedTrace] = useState([]);
+
+  // Effect to simulate sequential tracing delay
+  useEffect(() => {
+    if (result?.trace) {
+      setDisplayedTrace([]);
+      let currentIndex = 0;
+      
+      const intervalId = setInterval(() => {
+        if (currentIndex < result.trace.length) {
+          setDisplayedTrace(prev => [...prev, result.trace[currentIndex]]);
+          currentIndex++;
+        } else {
+          clearInterval(intervalId);
+        }
+      }, 1000); // 1 second delay between steps
+      
+      return () => clearInterval(intervalId);
+    } else {
+      setDisplayedTrace([]);
+    }
+  }, [result?.trace]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -126,13 +148,19 @@ const Dashboard = () => {
                   </h3>
                   <div className="trace-log">
                     {result ? (
-                      result.trace.map((step, i) => (
+                      displayedTrace.map((step, i) => (
                         <div key={i} className="trace-item">
                           <CheckCircle2 size={14} /> {step}
                         </div>
                       ))
                     ) : (
                       <div className="trace-item"><div className="spinner" style={{ width: '12px', height: '12px', borderWidth: '2px' }}/> Connecting to LangGraph workflow...</div>
+                    )}
+                    {/* Show a thinking indicator if trace is still populating */}
+                    {result && displayedTrace.length < result.trace.length && (
+                      <div className="trace-item" style={{ opacity: 0.7 }}>
+                        <div className="spinner" style={{ width: '12px', height: '12px', borderWidth: '2px' }}/> Agent thinking...
+                      </div>
                     )}
                   </div>
                 </div>
