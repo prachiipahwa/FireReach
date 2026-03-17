@@ -43,7 +43,7 @@ npm run dev
 Navigate to `http://localhost:5173` to test the UI!
 
 ## 📸 Dashboard Screenshots
-*(Upload a screenshot of the FireReach UI here showcasing the "Campaign Target" input form and the generated LangGraph trace output panels).*
+![FireReach Dashboard](image.png)
 
 ## 🌍 Free Deployment Links
 * **Frontend (Vercel)**: `https://fire-reach-iota.vercel.app/`
