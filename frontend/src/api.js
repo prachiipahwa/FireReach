@@ -7,16 +7,25 @@ const api = axios.create({
   },
 });
 
-export const runFireReachAgent = async (icp, companyName, targetEmail) => {
+export const startWorkflow = async (icp) => {
   try {
-    const response = await api.post('/outreach', {
-      icp,
-      company_name: companyName,
-      target_email: targetEmail,
+    const response = await api.post('/outreach/start', { icp });
+    return response.data;
+  } catch (error) {
+    console.error("Error starting FireReach workflow:", error);
+    throw error.response?.data || error.message;
+  }
+};
+
+export const resumeWorkflow = async (threadId, stateUpdate) => {
+  try {
+    const response = await api.post('/outreach/resume', {
+      thread_id: threadId,
+      ...stateUpdate
     });
     return response.data;
   } catch (error) {
-    console.error("Error running FireReach Agent:", error);
+    console.error("Error resuming FireReach workflow:", error);
     throw error.response?.data || error.message;
   }
 };

@@ -21,59 +21,118 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Request Model
-class OutreachRequest(BaseModel):
+# Request Models
+class StartRequest(BaseModel):
     icp: str
-    company_name: str
-    target_email: str
 
-# Response Model
-class OutreachResponse(BaseModel):
+class ResumeRequest(BaseModel):
+    thread_id: str
+    company_list: List[str] = None
+    results: List[Dict[str, Any]] = None
+
+# Response Models
+class WorkflowResponse(BaseModel):
     status: str
+    thread_id: str
+    state: str
     trace: List[str]
-    signals: str
-    account_brief: str
-    email_content: str
-    delivery_status: str
+    company_list: List[str]
+    results: List[Dict[str, Any]]
 
-@app.post(f"{settings.API_V1_STR}/outreach", response_model=OutreachResponse)
-async def generate_outreach(request: OutreachRequest):
+import uuid
+
+@app.post(f"{settings.API_V1_STR}/outreach/start", response_model=WorkflowResponse)
+async def start_workflow(request: StartRequest):
     """
-    Endpoint to trigger the autonomous outreach agentic workflow.
-    Takes an ICP, target company, and target email.
-    Executes the deterministic LangGraph workflow:
-    START -> Signal Harvester -> Research Analyst -> Outreach Sender -> END
+    Initializes the LangGraph workflow and runs up to the first breakpoint.
     """
     try:
-        # Initialize the workflow state (LangGraph AgentState)
+        thread_id = str(uuid.uuid4())
+        config = {"configurable": {"thread_id": thread_id}}
+        
         initial_state = {
             "icp": request.icp,
-            "company_name": request.company_name,
-            "target_email": request.target_email,
-            "signals": "",
-            "account_brief": "",
-            "delivery_status": "",
-            "email_content": "",
+            "company_name": "",
+            "target_email": "",
+            "company_list": [],
+            "leads": [],
+            "results": [],
             "trace": ["Workflow Initialized"]
         }
         
-        # Execute the workflow
-        print(f"Starting FireReach Workflow for {request.company_name}...")
-        final_state = agent_executor.invoke(initial_state)
+        print(f"Starting FireReach Workflow for thread: {thread_id}...")
         
-        # Construct the response
-        response = OutreachResponse(
+        # Invoke up to the first breakpoint (contact_finder)
+        for chunk in agent_executor.stream(initial_state, config):
+            pass 
+        
+        # Get the suspended state
+        current_state = agent_executor.get_state(config)
+        
+        response = WorkflowResponse(
             status="success",
-            trace=final_state.get("trace", []),
-            signals=final_state.get("signals", ""),
-            account_brief=final_state.get("account_brief", ""),
-            email_content=final_state.get("email_content", ""),
-            delivery_status=final_state.get("delivery_status", "")
+            thread_id=thread_id,
+            state="paused_at_companies",
+            trace=current_state.values.get("trace", []),
+            company_list=current_state.values.get("company_list", []),
+            results=current_state.values.get("results", [])
         )
         return response
         
     except Exception as e:
-        print(f"Workflow execution failed: {e}")
+        print(f"Workflow initialization failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post(f"{settings.API_V1_STR}/outreach/resume", response_model=WorkflowResponse)
+async def resume_workflow(request: ResumeRequest):
+    """
+    Injects human decisions and resumes the workflow.
+    """
+    try:
+        config = {"configurable": {"thread_id": request.thread_id}}
+        current_state = agent_executor.get_state(config)
+        
+        if not current_state:
+             raise HTTPException(status_code=404, detail="Thread not found")
+             
+        # Inject the state changes passed by the user
+        state_update = {}
+        if request.company_list is not None:
+             state_update["company_list"] = request.company_list
+        if request.results is not None:
+             state_update["results"] = request.results
+             
+        if state_update:
+             agent_executor.update_state(config, state_update)
+             
+        # Resume the workflow by invoking with None
+        print(f"Resuming thread {request.thread_id}...")
+        for chunk in agent_executor.stream(None, config):
+            pass
+            
+        new_state = agent_executor.get_state(config)
+        
+        # Determine current status
+        # If there are no next nodes, we are DONE.
+        if not new_state.next:
+             current_step = "completed"
+        elif "sender" in new_state.next:
+             current_step = "paused_at_approval"
+        else:
+             current_step = "processing"
+             
+        response = WorkflowResponse(
+            status="success",
+            thread_id=request.thread_id,
+            state=current_step,
+            trace=new_state.values.get("trace", []),
+            company_list=new_state.values.get("company_list", []),
+            results=new_state.values.get("results", [])
+        )
+        return response
+        
+    except Exception as e:
+        print(f"Workflow resume failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/health")
