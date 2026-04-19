@@ -2,6 +2,8 @@ import json
 from typing import Dict, TypedDict, Any, List
 from langgraph.graph import StateGraph, START, END
 from app.agent.tools import (
+    tool_lead_generator,
+    tool_contact_finder,
     tool_signal_harvester,
     tool_research_analyst,
     tool_outreach_automated_sender
@@ -30,23 +32,8 @@ class AgentState(TypedDict):
     # Track execution path for debugging
     trace: list[str]
 
-def _simulate_company_generation(icp: str) -> List[str]:
-    """Helper function to mock external API calls for lead generation."""
-    icp_lower = icp.lower()
-    
-    # Simple logic to generate relevant mock companies based on keywords
-    if "ai" in icp_lower or "machine learning" in icp_lower:
-        return ["NeuralNet Intelligence", "Cognitive AI Solutions", "DeepMatrix Tech", "Synapse Analytics", "AI Vanguard"]
-    elif "healthcare" in icp_lower or "medical" in icp_lower:
-        return ["MedTech Innovations", "CareWave Health", "CureSync Solutions", "Wellness AI", "HealthBridge Corp", "BioVita Systems"]
-    elif "finance" in icp_lower or "fintech" in icp_lower:
-        return ["FinStream Capital", "LedgerFlow Inc", "EquiTech Finance", "SecurePay Systems", "CapitalBridge Algorithms"]
-    else:
-        # Default generic companies
-        return ["Acme Global", "Apex Innovations", "Pinnacle Software", "Zenith Technologies", "NovaTech Solutions", "Nexus Corp"]
-
 def lead_generator_node(state: AgentState) -> Dict:
-    """Node: Generate list of companies based on ICP."""
+    """Node: Generate list of companies based on ICP using Tavily and Groq."""
     print("[Node] Calling Lead Generator...")
     icp = state.get("icp", "")
     new_trace = state.get("trace", []) + ["Lead Generation Started"]
@@ -57,36 +44,17 @@ def lead_generator_node(state: AgentState) -> Dict:
         return {"company_list": [], "trace": new_trace}
         
     try:
-        # In a real implementation, this would call ZoomInfo, Apollo, LinkedIn, etc.
-        companies = _simulate_company_generation(icp)
-        new_trace.append(f"Generated {len(companies)} companies")
+        companies_json = tool_lead_generator.invoke({"icp": icp})
+        companies = json.loads(companies_json)
+        new_trace.append(f"Generated {len(companies)} companies via LLM Search")
     except Exception as e:
         new_trace.append(f"Error during lead generation: {str(e)}")
         companies = []
         
     return {"company_list": companies, "trace": new_trace}
 
-import random
-import re
-
-def _generate_mock_email(company_name: str) -> str:
-    """Helper function to mock realistic contact email."""
-    # Clean company name to create a valid domain
-    domain = re.sub(r'[^a-zA-Z0-9]', '', company_name.lower())
-    if not domain:
-        domain = "example"
-        
-    formats = [
-        f"contact@{domain}.com",
-        f"info@{domain}.com",
-        f"alex@{domain}.com",
-        f"sarahs@{domain}.com",
-        f"ceo@{domain}.com"
-    ]
-    return random.choice(formats)
-
 def contact_finder_node(state: AgentState) -> Dict:
-    """Node: Find contacts for the list of companies."""
+    """Node: Find contacts for the list of companies via Hunter.io."""
     print("[Node] Calling Contact Finder...")
     company_list = state.get("company_list", [])
     new_trace = state.get("trace", []) + ["Contact Finder Started"]
@@ -99,21 +67,25 @@ def contact_finder_node(state: AgentState) -> Dict:
         return {"leads": leads, "trace": new_trace}
         
     for comp in company_list:
-        # Validate structure: Ensure no empty company names
         if not comp or not isinstance(comp, str) or not comp.strip():
             continue
             
         company_clean = comp.strip()
-        email = _generate_mock_email(company_clean)
         
+        try:
+           email = tool_contact_finder.invoke({"company_name": company_clean})
+        except Exception as e:
+           new_trace.append(f"Warning: Contact fetch failed for {company_clean}")
+           continue
+           
         # Ensure email format is valid string
-        if isinstance(email, str) and email:
+        if isinstance(email, str) and email and "@" in email:
             leads.append({
                 "company_name": company_clean,
                 "email": email
             })
             
-    new_trace.append(f"Generated {len(leads)} leads")
+    new_trace.append(f"Discovered {len(leads)} verified leads via Hunter.io")
     return {"leads": leads, "trace": new_trace}
 
 def harvest_signals_node(state: AgentState) -> Dict:

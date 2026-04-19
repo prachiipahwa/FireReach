@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str = ""
     TAVILY_API_KEY: str = ""
     SENDGRID_API_KEY: str = ""
+    HUNTER_API_KEY: str = ""
     
     # Optional API keys for additional signal harvesting
     SERPAPI_API_KEY: str = ""

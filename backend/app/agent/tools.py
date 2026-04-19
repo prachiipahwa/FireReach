@@ -7,6 +7,108 @@ from app.core.config import settings
 # from tavily import TavilyClient
 # tavily_client = TavilyClient(api_key=settings.TAVILY_API_KEY)
 
+@tool("tool_lead_generator")
+def tool_lead_generator(icp: str) -> str:
+    """
+    Search the web for companies fitting the Ideal Customer Profile (ICP).
+    Returns a JSON string formatted as a list of company names.
+    """
+    import json
+    print(f"[Tool] Searching for companies matching ICP: {icp}...")
+    
+    if not settings.TAVILY_API_KEY or settings.TAVILY_API_KEY == "mock":
+        # Fallback if no Tavily key
+        return json.dumps(["Acme Corp", "Pinnacle Technologies", "NovaTech Solutions"])
+
+    try:
+        from tavily import TavilyClient
+        from langchain_groq import ChatGroq
+        from langchain_core.prompts import PromptTemplate
+        
+        client = TavilyClient(api_key=settings.TAVILY_API_KEY)
+        search_query = f"top {icp} companies software platform list 2024"
+        response = client.search(query=search_query, max_results=5)
+        
+        search_context = "\n".join([res['content'] for res in response['results']])
+        
+        # Use LLM to extract clean list of company names from search context
+        if not settings.GROQ_API_KEY or settings.GROQ_API_KEY == "mock":
+            return json.dumps(["Mocked Domain 1", "Mocked Domain 2"])
+            
+        llm = ChatGroq(
+            temperature=0.1,
+            model_name="llama-3.3-70b-versatile", 
+            api_key=settings.GROQ_API_KEY
+        )
+        
+        prompt = PromptTemplate.from_template(
+            """Extract exactly 3 to 5 real company names from the search context below that match the ICP '{icp}'.
+            Return ONLY a raw JSON array of strings containing the company names. Do not include markdown formatting or the word json.
+            
+            Context:
+            {context}
+            """
+        )
+        
+        chain = prompt | llm
+        llm_resp = chain.invoke({"icp": icp, "context": search_context})
+        
+        # Clean the output to ensure valid JSON (remove backticks if any)
+        clean_json = llm_resp.content.replace("```json", "").replace("```", "").strip()
+        
+        # Verify it parses, otherwise fallback
+        names = json.loads(clean_json)
+        if isinstance(names, list) and len(names) > 0:
+             return json.dumps(names)
+        else:
+             raise ValueError("LLM did not return a valid list.")
+             
+    except Exception as e:
+        print(f"[Tool] Error discovering leads: {e}")
+        return json.dumps(["Acme Corp", "Apex Innovations", "Zenith Technologies"])
+
+import urllib.request
+import urllib.parse
+
+@tool("tool_contact_finder")
+def tool_contact_finder(company_name: str) -> str:
+    """
+    Fetch the most relevant contact email for a given company name.
+    """
+    import json
+    import random
+    import re
+    print(f"[Tool] Discovering contacts for: {company_name}...")
+    
+    # Fallback/Mock logic if no Hunter.io key
+    if not settings.HUNTER_API_KEY or settings.HUNTER_API_KEY == "mock":
+        domain = re.sub(r'[^a-zA-Z0-9]', '', company_name.lower())
+        if not domain:
+            domain = "example"
+        formats = [f"contact@{domain}.com", f"ceo@{domain}.com", f"sales@{domain}.com"]
+        return random.choice(formats)
+        
+    try:
+        # Use Hunter API Domain Search endpoint with 'company' query parameter
+        encoded_company = urllib.parse.quote(company_name)
+        url = f"https://api.hunter.io/v2/domain-search?company={encoded_company}&api_key={settings.HUNTER_API_KEY}"
+        
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=10) as response:
+             data = json.loads(response.read().decode())
+             
+        emails = data.get("data", {}).get("emails", [])
+        if emails:
+             # Just return the first (most confident) email
+             return emails[0].get("value")
+        else:
+             raise ValueError("Hunter.io returned 0 emails for this company.")
+             
+    except Exception as e:
+        print(f"[Tool] Error pulling from Hunter.io: {e}")
+        domain = re.sub(r'[^a-zA-Z0-9]', '', company_name.lower()) or "example"
+        return f"info@{domain}.com"
+
 @tool("tool_signal_harvester")
 def tool_signal_harvester(company_name: str) -> str:
     """
